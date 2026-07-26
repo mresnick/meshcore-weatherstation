@@ -12,13 +12,13 @@ Fine Offset Electronics is the actual manufacturer behind many rebranded weather
 
 The gateway is a dual-radio device. A Wio-SX1262 LoRa radio runs the actual MeshCore mesh protocol, the same as any other MeshCore node. A CC1101 sub-GHz receiver listens for the weather station's own FSK broadcast (915MHz in the US) and decodes it locally using a ported [rtl_433](https://github.com/merbanan/rtl_433) decoder. There's no Wi-Fi involved, no vendor gateway or cloud account, and nothing gets polled. The node only ever answers requests; it never pushes anything onto the mesh unprompted.
 
-Once running, other nodes can request standard CayenneLPP telemetry (temperature, humidity, pressure) the same way as any MeshCore sensor node. They can also post `!weather` in a joined group channel (default: hashtag channel `#bot`, change this for your own deployment) or send it as a direct message, and get back a full free-text report (temperature, humidity, pressure, wind, rain rate, solar, UV) that isn't limited by CayenneLPP's fixed type vocabulary.
+Once running, other nodes can request standard CayenneLPP telemetry (temperature, humidity, pressure) the same way as any MeshCore sensor node. They can also post `!weather` in a joined group channel (each device picks its own default channel, unique to it, on first boot) or send it as a direct message, and get back a full free-text report (temperature, humidity, pressure, wind, rain rate, solar, UV) that isn't limited by CayenneLPP's fixed type vocabulary.
 
 ## Hardware
 
-- [Seeed Studio XIAO ESP32-S3](https://www.seeedstudio.com/Seeed-XIAO-ESP32S3-p-5627.html)
-- [Seeed Wio-SX1262](https://www.seeedstudio.com/Wio-SX1262-p-5982.html) LoRa module (stacks directly onto the XIAO, no wiring needed)
-- A CC1101 sub-GHz transceiver breakout board (915MHz-region variant for the US)
+- [Seeed Studio XIAO ESP32-S3](https://www.seeedstudio.com/XIAO-ESP32S3-p-5627.html)
+- [Seeed Wio-SX1262](https://www.seeedstudio.com/Wio-SX1262-with-XIAO-ESP32S3-p-5982.html) LoRa module (stacks directly onto the XIAO, no wiring needed)
+- A CC1101 sub-GHz transceiver breakout board
 - A Fine Offset-protocol weather station transmitting on 915MHz (or the appropriate ISM band for your region)
 
 ### CC1101 wiring
