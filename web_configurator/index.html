@@ -137,6 +137,25 @@
       </div>
     </div>
 
+    <div class="card" id="deviceCard" style="display:none">
+      <h2>Device name</h2>
+      <div class="field">
+        <input type="text" id="deviceName" placeholder="Weather Station a3f2">
+      </div>
+      <button id="deviceNameBtn">Update</button>
+      <p class="status" id="deviceNameStatus"></p>
+    </div>
+
+    <div class="card" id="triggerCard" style="display:none">
+      <h2>Trigger command</h2>
+      <p class="status">The text that triggers a weather report reply, in a joined channel or DM.</p>
+      <div class="field">
+        <input type="text" id="triggerText" placeholder="!weather">
+      </div>
+      <button id="triggerBtn">Update</button>
+      <p class="status" id="triggerStatus"></p>
+    </div>
+
     <div class="card" id="channelsCard" style="display:none">
       <h2>Joined channels</h2>
       <ul class="channel-list" id="channelList"></ul>
@@ -266,8 +285,22 @@
       const statusEl = document.getElementById("connStatus");
       statusEl.textContent = connected ? "Connected" : "Not connected";
       statusEl.className = connected ? "status ok" : "status";
+      document.getElementById("deviceCard").style.display = connected ? "block" : "none";
+      document.getElementById("triggerCard").style.display = connected ? "block" : "none";
       document.getElementById("channelsCard").style.display = connected ? "block" : "none";
       document.getElementById("addCard").style.display = connected ? "block" : "none";
+    }
+
+    async function refreshDeviceName() {
+      const reply = await sendCommand("get name");
+      if (reply === null) return;
+      document.getElementById("deviceName").value = reply.replace(/^>\s*/, "");
+    }
+
+    async function refreshTrigger() {
+      const reply = await sendCommand("trigger");
+      if (reply === null) return;
+      document.getElementById("triggerText").value = reply;
     }
 
     async function refreshChannelList() {
@@ -327,6 +360,8 @@
         readLoop();
         setConnected(true);
         await new Promise(r => setTimeout(r, 300)); // let the port settle
+        refreshDeviceName();
+        refreshTrigger();
         refreshChannelList();
       } catch (e) {
         log("!!", "Connection failed: " + e.message);
@@ -336,6 +371,30 @@
         document.getElementById("logDetails").open = true;
         port = null;
       }
+    });
+
+    document.getElementById("deviceNameBtn").addEventListener("click", async () => {
+      const statusEl = document.getElementById("deviceNameStatus");
+      const name = document.getElementById("deviceName").value.trim();
+      if (!name) { statusEl.textContent = "Enter a name."; statusEl.className = "status err"; return; }
+      statusEl.textContent = "Updating...";
+      statusEl.className = "status";
+      const reply = await sendCommand(`set name ${name}`);
+      if (reply === null) { statusEl.textContent = "Timed out."; statusEl.className = "status err"; return; }
+      statusEl.textContent = reply;
+      statusEl.className = reply.startsWith("OK") ? "status ok" : "status err";
+    });
+
+    document.getElementById("triggerBtn").addEventListener("click", async () => {
+      const statusEl = document.getElementById("triggerStatus");
+      const text = document.getElementById("triggerText").value.trim();
+      if (!text) { statusEl.textContent = "Enter a trigger command."; statusEl.className = "status err"; return; }
+      statusEl.textContent = "Updating...";
+      statusEl.className = "status";
+      const reply = await sendCommand(`trigger ${text}`);
+      if (reply === null) { statusEl.textContent = "Timed out."; statusEl.className = "status err"; return; }
+      statusEl.textContent = reply;
+      statusEl.className = reply.startsWith("OK") ? "status ok" : "status err";
     });
 
     document.getElementById("tabHashtag").addEventListener("click", () => {

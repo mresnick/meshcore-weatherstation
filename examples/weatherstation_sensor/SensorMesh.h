@@ -155,19 +155,34 @@ private:
   uint8_t pending_sf;
   uint8_t pending_cr;
 
-  // Group channels this node listens to for WEATHER_COMMAND ("!weather"),
-  // e.g. "#weathertest". Responds with a free-text weather report -- never
-  // posts anything unprompted. Remotely admin-managed at runtime via the
-  // "channel join/leave/list" CLI commands (see handleChannelCommand());
-  // membership is NOT persisted across reboots -- resets to the compiled-in
-  // WEATHER_CHANNEL_NAME/PSK default (if any) on every boot.
+  // Group channels this node listens to for the weather-report trigger
+  // command (see _weather_trigger below), e.g. "#weather-a3f2". Responds
+  // with a free-text weather report -- never posts anything unprompted.
+  // Remotely managed at runtime via the "channel join/leave/list" CLI
+  // commands (see handleChannelCommand()) or the web configurator, and
+  // persisted to flash (see loadWeatherSettings/saveWeatherSettings) so it
+  // survives a reboot. The very first boot (no settings file yet) joins a
+  // default channel derived from this device's own chip ID.
   static const int MAX_WEATHER_CHANNELS = 4;
   ChannelDetails weather_channels[MAX_WEATHER_CHANNELS];
+  // ChannelDetails only keeps the (zero-padded) 32-byte secret and its
+  // derived hash, not the original key length -- track that separately so
+  // saveWeatherSettings()/loadWeatherSettings() can recompute the exact same
+  // hash after a reboot (16 vs 32 zero-padded bytes hash differently).
+  uint8_t weather_channel_secret_lens[MAX_WEATHER_CHANNELS];
   int num_weather_channels;
   void sendWeatherReport(const mesh::GroupChannel& channel);
   bool joinWeatherChannel(const char* name, const uint8_t* secret, int secret_len);
   bool leaveWeatherChannel(const char* name);
   void handleChannelCommand(char* args, char* reply);
+
+  // The text that triggers a weather report (default "!weather"), settable
+  // at runtime via the "trigger" CLI command / web configurator, and
+  // persisted alongside the channel list.
+  char _weather_trigger[16];
+  void handleTriggerCommand(char* args, char* reply);
+  void loadWeatherSettings(FILESYSTEM* fs);
+  void saveWeatherSettings();
 
   // Spam/airtime protection: a WEATHER_COMMAND reply is a flood send (costs
   // airtime for the whole mesh, not just this node), so replies are rate-

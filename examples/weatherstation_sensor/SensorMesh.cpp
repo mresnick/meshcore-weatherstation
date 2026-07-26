@@ -21,7 +21,10 @@
 #endif
 
 #ifndef ADVERT_NAME
-  #define  ADVERT_NAME   "sensor"
+  // Empty = no fixed name given -- the constructor computes a name that's
+  // unique per device (e.g. "Weather Station a3f2", from the chip ID), so
+  // multiple freshly-flashed units aren't indistinguishable on the mesh.
+  #define  ADVERT_NAME   ""
 #endif
 #ifndef ADVERT_LAT
   #define  ADVERT_LAT  0.0
@@ -46,25 +49,18 @@
   #define TXT_ACK_DELAY     200
 #endif
 
-// "!weather" command/response on a group channel -- separate from CayenneLPP
-// telemetry, so wind/rain/solar/UV can be reported as free text without
-// CayenneLPP's type/labeling constraints. Still request/response only: this
-// node never posts to the channel except in reply to WEATHER_COMMAND.
-// WEATHER_CHANNEL_PSK is expected to be a MeshCore "hashtag channel" key
-// (first 16 bytes of sha256("#name"), see docs/companion_protocol.md), not a
-// random private-channel secret -- so any app joining WEATHER_CHANNEL_NAME
-// derives the same key on its own, nothing to share out-of-band.
-#ifndef WEATHER_CHANNEL_NAME
-  #define WEATHER_CHANNEL_NAME  "#weathertest"
-#endif
-#ifndef WEATHER_CHANNEL_PSK
-  #define WEATHER_CHANNEL_PSK  ""   // empty = channel disabled (no valid secret to join with)
-#endif
+// Trigger command/response on a group channel or DM -- separate from
+// CayenneLPP telemetry, so wind/rain/solar/UV can be reported as free text
+// without CayenneLPP's type/labeling constraints. Still request/response
+// only: this node never posts to a channel except in reply to the trigger.
+// This is just the first-boot default -- both the trigger text and channel
+// membership are runtime-configurable (CLI "trigger"/"channel" commands, or
+// the web configurator) and persisted to flash from then on.
 #ifndef WEATHER_COMMAND
   #define WEATHER_COMMAND  "!weather"
 #endif
 
-// Minimum time between WEATHER_COMMAND replies, shared globally across every
+// Minimum time between trigger-command replies, shared globally across every
 // channel/DM -- a reply is a flood send (costs airtime mesh-wide), so this
 // protects against spam/accidental loops regardless of who's asking.
 #ifndef WEATHER_REPLY_COOLDOWN_MS
@@ -76,6 +72,19 @@
 #endif
 
 /* ------------------------------ Code -------------------------------- */
+
+// Short per-device suffix (last 16 bits of the chip's factory-programmed
+// MAC) used to build a default node name / weather-channel name that's
+// unique per unit, so multiple freshly-flashed devices aren't
+// indistinguishable from each other on the mesh.
+static const char* chipIdSuffix() {
+  static char suffix[5] = "0000";
+#if defined(ESP32)
+  uint64_t mac = ESP.getEfuseMac();
+  snprintf(suffix, sizeof(suffix), "%04x", (unsigned)(mac & 0xFFFF));
+#endif
+  return suffix;
+}
 
 #define FIRMWARE_VER_LEVEL       1
 
@@ -487,6 +496,8 @@ void SensorMesh::handleCommand(uint32_t sender_timestamp, char* command, char* r
     sprintf(reply, "%x", board.getGpio());
   } else if (memcmp(command, "channel ", 8) == 0) {   // format: channel join|leave|list ...
     handleChannelCommand(&command[8], reply);
+  } else if (memcmp(command, "trigger", 7) == 0 && (command[7] == 0 || command[7] == ' ')) {   // format: trigger [<text>]
+    handleTriggerCommand(command[7] == ' ' ? &command[8] : &command[7], reply);
   } else{
     _cli.handleCommand(sender_timestamp, command, reply);  // common CLI commands
   }
@@ -604,9 +615,10 @@ void SensorMesh::onPeerDataRecv(mesh::Packet* packet, uint8_t type, int sender_i
     if (sender_timestamp > from->last_timestamp) {  // prevent replay attacks
       if (flags == TXT_TYPE_PLAIN) {
         // Any known contact can DM plain text -- admin or guest (guests are
-        // auto-registered on first contact, see handleLoginReq). Only
-        // WEATHER_COMMAND gets a substantive reply; anything else is quietly
-        // ignored (handleIncomingMsg returns false, so no ack is sent either).
+        // auto-registered on first contact, see handleLoginReq). Only the
+        // trigger command (_weather_trigger) gets a substantive reply;
+        // anything else is quietly ignored (handleIncomingMsg returns false,
+        // so no ack is sent either).
         bool handled = handleIncomingMsg(*from, sender_timestamp, &data[5], flags, len - 5);
         if (handled) { // if msg was handled then send an ack
           from->last_timestamp = sender_timestamp;
@@ -671,7 +683,7 @@ void SensorMesh::onPeerDataRecv(mesh::Packet* packet, uint8_t type, int sender_i
 bool SensorMesh::handleIncomingMsg(ClientInfo& from, uint32_t timestamp, uint8_t* data, uint8_t flags, size_t len) {
   const char* text = (const char *) data;
 
-  if (strstr(text, WEATHER_COMMAND) == NULL) {
+  if (strstr(text, _weather_trigger) == NULL) {
     return false;  // not a command we handle -- leave it unacked/unhandled
   }
   if (!weatherReplyAllowed()) {
@@ -795,6 +807,7 @@ bool SensorMesh::joinWeatherChannel(const char* name, const uint8_t* secret, int
   memcpy(dest->channel.secret, secret, secret_len);
   mesh::Utils::sha256(dest->channel.hash, sizeof(dest->channel.hash), dest->channel.secret, secret_len);
   StrHelper::strncpy(dest->name, name, sizeof(dest->name));
+  weather_channel_secret_lens[num_weather_channels] = (uint8_t) secret_len;
   num_weather_channels++;
   return true;
 }
@@ -805,6 +818,7 @@ bool SensorMesh::leaveWeatherChannel(const char* name) {
       // shift remaining entries down to close the gap
       for (int j = i; j < num_weather_channels - 1; j++) {
         weather_channels[j] = weather_channels[j + 1];
+        weather_channel_secret_lens[j] = weather_channel_secret_lens[j + 1];
       }
       num_weather_channels--;
       return true;
@@ -847,6 +861,7 @@ void SensorMesh::handleChannelCommand(char* args, char* reply) {
     }
 
     if (joinWeatherChannel(name, secret, secret_len)) {
+      saveWeatherSettings();
       sprintf(reply, "OK - joined %s", name);
     } else {
       strcpy(reply, "Err - bad psk, bad name, or channel slots full");
@@ -854,6 +869,7 @@ void SensorMesh::handleChannelCommand(char* args, char* reply) {
   } else if (memcmp(args, "leave ", 6) == 0) {
     char* name = &args[6];
     if (leaveWeatherChannel(name)) {
+      saveWeatherSettings();
       sprintf(reply, "OK - left %s", name);
     } else {
       strcpy(reply, "Err - not joined");
@@ -861,6 +877,83 @@ void SensorMesh::handleChannelCommand(char* args, char* reply) {
   } else {
     strcpy(reply, "Err - usage: channel join|leave|list");
   }
+}
+
+// "trigger"        -- show the current trigger text
+// "trigger <text>" -- set the trigger text
+void SensorMesh::handleTriggerCommand(char* args, char* reply) {
+  while (*args == ' ') args++;
+
+  if (args[0] == 0) {
+    strcpy(reply, _weather_trigger);
+    return;
+  }
+  if (strlen(args) >= sizeof(_weather_trigger)) {
+    strcpy(reply, "Err - too long");
+    return;
+  }
+  StrHelper::strncpy(_weather_trigger, args, sizeof(_weather_trigger));
+  saveWeatherSettings();
+  sprintf(reply, "OK - trigger set to %s", _weather_trigger);
+}
+
+#define WEATHER_SETTINGS_FILE  "/weather_settings"
+
+void SensorMesh::loadWeatherSettings(FILESYSTEM* fs) {
+#if defined(RP2040_PLATFORM)
+  File file = fs->open(WEATHER_SETTINGS_FILE, "r");
+#else
+  File file = fs->open(WEATHER_SETTINGS_FILE);
+#endif
+  if (file) {
+    file.read((uint8_t *) _weather_trigger, sizeof(_weather_trigger));
+    uint8_t count = 0;
+    file.read(&count, 1);
+    num_weather_channels = 0;
+    for (uint8_t i = 0; i < count && i < MAX_WEATHER_CHANNELS; i++) {
+      char name[32];
+      uint8_t secret[32];
+      uint8_t secret_len = 0;
+      file.read((uint8_t *) name, sizeof(name));
+      file.read(secret, sizeof(secret));
+      file.read(&secret_len, 1);
+      joinWeatherChannel(name, secret, secret_len);
+    }
+    file.close();
+    return;
+  }
+
+  // First boot -- no settings file yet. Join a channel unique to this
+  // device (derived from its own chip ID) and save it immediately, so the
+  // default is visible/editable via the web configurator right away.
+  char default_channel[32];
+  snprintf(default_channel, sizeof(default_channel), "#weather-%s", chipIdSuffix());
+  uint8_t secret[16];
+  mesh::Utils::sha256(secret, sizeof(secret), (const uint8_t *) default_channel, strlen(default_channel));
+  joinWeatherChannel(default_channel, secret, sizeof(secret));
+  saveWeatherSettings();
+}
+
+void SensorMesh::saveWeatherSettings() {
+#if defined(NRF52_PLATFORM) || defined(STM32_PLATFORM)
+  _fs->remove(WEATHER_SETTINGS_FILE);
+  File file = _fs->open(WEATHER_SETTINGS_FILE, FILE_O_WRITE);
+#elif defined(RP2040_PLATFORM)
+  File file = _fs->open(WEATHER_SETTINGS_FILE, "w");
+#else
+  File file = _fs->open(WEATHER_SETTINGS_FILE, "w", true);
+#endif
+  if (!file) return;
+
+  file.write((uint8_t *) _weather_trigger, sizeof(_weather_trigger));
+  uint8_t count = (uint8_t) num_weather_channels;
+  file.write(&count, 1);
+  for (int i = 0; i < num_weather_channels; i++) {
+    file.write((uint8_t *) weather_channels[i].name, sizeof(weather_channels[i].name));
+    file.write(weather_channels[i].channel.secret, sizeof(weather_channels[i].channel.secret));
+    file.write(&weather_channel_secret_lens[i], 1);
+  }
+  file.close();
 }
 
 void SensorMesh::onGroupDataRecv(mesh::Packet* packet, uint8_t type, const mesh::GroupChannel& channel, uint8_t* data, size_t len) {
@@ -875,7 +968,7 @@ void SensorMesh::onGroupDataRecv(mesh::Packet* packet, uint8_t type, const mesh:
 
   // MeshCore clients prefix group texts with "<sender>: ", so search for the
   // command anywhere in the message rather than requiring an exact match.
-  if (strstr(text, WEATHER_COMMAND) != NULL) {
+  if (strstr(text, _weather_trigger) != NULL) {
     if (!weatherReplyAllowed()) return;
     sendWeatherReport(channel);
   }
@@ -929,7 +1022,13 @@ SensorMesh::SensorMesh(mesh::MainBoard& board, mesh::Radio& radio, mesh::Millise
   _prefs.rx_delay_base =   0.0f;  // turn off by default, was 10.0;
   _prefs.tx_delay_factor = 0.5f;   // was 0.25f
   _prefs.direct_tx_delay_factor = 0.2f; // was zero
-  StrHelper::strncpy(_prefs.node_name, ADVERT_NAME, sizeof(_prefs.node_name));
+  if (ADVERT_NAME[0] != 0) {
+    StrHelper::strncpy(_prefs.node_name, ADVERT_NAME, sizeof(_prefs.node_name));
+  } else {
+    char default_name[32];
+    snprintf(default_name, sizeof(default_name), "Weather Station %s", chipIdSuffix());
+    StrHelper::strncpy(_prefs.node_name, default_name, sizeof(_prefs.node_name));
+  }
   _prefs.node_lat = ADVERT_LAT;
   _prefs.node_lon = ADVERT_LON;
   StrHelper::strncpy(_prefs.password, ADMIN_PASSWORD, sizeof(_prefs.password));
@@ -952,15 +1051,10 @@ SensorMesh::SensorMesh(mesh::MainBoard& board, mesh::Radio& radio, mesh::Millise
 
   memset(default_scope.key, 0, sizeof(default_scope.key));
 
-  // join the compiled-in default "!weather" command/response channel, if a
-  // PSK was configured -- more can be joined/left at runtime via the
-  // "channel join/leave/list" CLI commands (see handleChannelCommand()).
+  // Real values are loaded from flash (or defaulted fresh) in
+  // loadWeatherSettings(), called from begin() once _fs is available.
   num_weather_channels = 0;
-  if (WEATHER_CHANNEL_PSK[0] != 0) {
-    uint8_t secret[32];
-    int secret_len = decode_base64((unsigned char *) WEATHER_CHANNEL_PSK, strlen(WEATHER_CHANNEL_PSK), secret);
-    joinWeatherChannel(WEATHER_CHANNEL_NAME, secret, secret_len);
-  }
+  StrHelper::strncpy(_weather_trigger, WEATHER_COMMAND, sizeof(_weather_trigger));
 }
 
 void SensorMesh::begin(FILESYSTEM* fs) {
@@ -971,6 +1065,7 @@ void SensorMesh::begin(FILESYSTEM* fs) {
 
   acl.load(_fs, self_id);
   region_map.load(_fs);
+  loadWeatherSettings(_fs);
 
   // establish default-scope
   {

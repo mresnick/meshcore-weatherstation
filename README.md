@@ -12,7 +12,7 @@ Fine Offset Electronics is the actual manufacturer behind many rebranded weather
 
 The gateway is a dual-radio device. A Wio-SX1262 LoRa radio runs the actual MeshCore mesh protocol, the same as any other MeshCore node. A CC1101 sub-GHz receiver listens for the weather station's own FSK broadcast (915MHz in the US) and decodes it locally using a ported [rtl_433](https://github.com/merbanan/rtl_433) decoder. There's no Wi-Fi involved, no vendor gateway or cloud account, and nothing gets polled. The node only ever answers requests; it never pushes anything onto the mesh unprompted.
 
-Once running, other nodes can request standard CayenneLPP telemetry (temperature, humidity, pressure) the same way as any MeshCore sensor node. They can also post `!weather` in a joined group channel (default: hashtag channel `#weathertest`, change this for your own deployment) or send it as a direct message, and get back a full free-text report (temperature, humidity, pressure, wind, rain rate, solar, UV) that isn't limited by CayenneLPP's fixed type vocabulary.
+Once running, other nodes can request standard CayenneLPP telemetry (temperature, humidity, pressure) the same way as any MeshCore sensor node. They can also post `!weather` in a joined group channel (default: hashtag channel `#bot`, change this for your own deployment) or send it as a direct message, and get back a full free-text report (temperature, humidity, pressure, wind, rain rate, solar, UV) that isn't limited by CayenneLPP's fixed type vocabulary.
 
 ## Hardware
 
@@ -42,9 +42,11 @@ The easiest way to get started is the web flasher. No build tools required, just
 
 **[Flash it now](https://mresnick.github.io/meshcore-weatherstation/)** (requires a browser with WebSerial support, and a USB cable)
 
-## Configuring channels
+## Configuring your node
 
-Once flashed, use the [web configurator](https://mresnick.github.io/meshcore-weatherstation/configure/) over USB to choose which group channels the node listens to for `!weather`, without needing to build firmware or use the mesh CLI.
+Once flashed, use the [web configurator](https://mresnick.github.io/meshcore-weatherstation/configure/) over USB to set the node's name, the command it responds to, and which group channels it listens on, all without building firmware or using the mesh CLI.
+
+Each device picks its own unique defaults on first boot (a name and a group channel both derived from its chip ID), so multiple freshly-flashed units aren't indistinguishable from each other. Everything you change is saved to flash and survives a reboot or power loss.
 
 ## Building from source
 
@@ -56,21 +58,23 @@ Key build flags (set in `variants/xiao_s3_wio_weatherstation/platformio.ini`):
 
 | Flag | Purpose |
 |---|---|
-| `ADVERT_NAME` | Node name advertised on the mesh |
+| `ADVERT_NAME` | Node name advertised on the mesh (leave unset for a per-device default) |
 | `ADVERT_LAT` / `ADVERT_LON` | Node location (optional) |
 | `ADMIN_PASSWORD` | Password for admin/config access over the mesh CLI |
 | `RF_MODULE_FREQUENCY` | CC1101 receive frequency (915.00 for US; adjust for your region) |
-| `WEATHER_CHANNEL_NAME` / `WEATHER_CHANNEL_PSK` | The group channel that responds to `!weather` |
-| `WEATHER_COMMAND` | The trigger command (default `!weather`) |
+| `WEATHER_COMMAND` | First-boot default trigger command (default `!weather`) |
 
 ## CLI commands
 
-Telemetry queries are open to anyone (no login required, matching how any MeshCore sensor node works). Channel commands are available locally over USB serial without a password, and remotely over the mesh with the admin password:
+Telemetry queries are open to anyone (no login required, matching how any MeshCore sensor node works). The commands below are available locally over USB serial without a password, and remotely over the mesh with the admin password:
 
 - `channel join #name`: join a "hashtag channel" (key derived from the name itself)
 - `channel join name <psk-base64>`: join a private channel with an explicit key
 - `channel leave name`
 - `channel list`
+- `trigger`: show the current trigger command
+- `trigger <text>`: set the trigger command
+- `set name <text>` / `get name`: set/view the node's name (built into MeshCore's CLI)
 
 ---
 
