@@ -98,17 +98,19 @@
     .status.ok { color: #16a34a; }
     .status.err { color: var(--danger); }
     details summary { cursor: pointer; color: var(--muted); font-size: 0.85rem; }
-    pre#log {
+    #log {
       background: rgba(127, 127, 127, 0.1);
       border-radius: 8px;
       padding: 0.75rem;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
       font-size: 0.78rem;
-      max-height: 200px;
+      max-height: 320px;
       overflow-y: auto;
       white-space: pre-wrap;
       word-break: break-all;
       margin-top: 0.5rem;
     }
+    #log div { line-height: 1.4; }
     .unsupported {
       display: none;
       background: #fff3cd;
@@ -125,20 +127,6 @@
     .tabs button.active { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
     .checkbox-row { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
     .checkbox-row label { margin: 0; color: var(--fg); font-size: 0.95rem; }
-    #debugLog {
-      display: none;
-      background: rgba(127, 127, 127, 0.1);
-      border-radius: 8px;
-      padding: 0.75rem;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      font-size: 0.78rem;
-      max-height: 320px;
-      overflow-y: auto;
-      white-space: pre-wrap;
-      word-break: break-all;
-      margin-top: 0.5rem;
-    }
-    #debugLog div { line-height: 1.4; }
     .dbg-success { color: var(--dbg-success); font-weight: 600; }
     .dbg-fail { color: var(--dbg-fail); }
     .dbg-house { color: var(--dbg-house); }
@@ -218,20 +206,14 @@
       <p class="status" id="joinStatus"></p>
     </div>
 
-    <div class="card" id="debugCard" style="display:none">
-      <h2>Debug console</h2>
-      <p class="status">Live CC1101 decode attempts straight from the device -- green is a real decode, yellow is a capture that failed to decode, cyan is housekeeping.</p>
-      <div class="row">
-        <span class="checkbox-row"><input type="checkbox" id="debugToggle"><label for="debugToggle">Show decode logs</label></span>
-        <button type="button" id="debugClearBtn" class="secondary" style="margin-left:auto">Clear</button>
-      </div>
-      <div id="debugLog"></div>
-    </div>
-
     <div class="card">
       <details id="logDetails">
         <summary>Raw serial log</summary>
-        <pre id="log"></pre>
+        <div class="row" style="margin-top:0.5rem">
+          <span class="checkbox-row"><input type="checkbox" id="debugToggle"><label for="debugToggle">Show decode logs (CC1101 capture attempts -- green succeeded, yellow failed, cyan is housekeeping)</label></span>
+          <button type="button" id="logClearBtn" class="secondary" style="margin-left:auto">Clear</button>
+        </div>
+        <div id="log"></div>
       </details>
     </div>
 
@@ -251,10 +233,8 @@
     const REPLY_MARKER = "  -> ";
 
     const logEl = document.getElementById("log");
-    function log(dir, text) {
-      logEl.textContent += `${dir} ${text}\n`;
-      logEl.scrollTop = logEl.scrollHeight;
-    }
+    const debugToggle = document.getElementById("debugToggle");
+    const LOG_MAX_LINES = 500;
 
     // Classification mirrors tools/watch_weatherstation_serial.py -- a real
     // decode always reports a "Fineoffset-..." model (an undecoded/failed
@@ -264,29 +244,37 @@
     const DEBUG_SUCCESS_RE = /"model"\s*:\s*"Fineoffset-/;
     const DEBUG_FAIL_RE = /Checksum error|short package|abort length|undecoded signal|Unparsed Signal|ignoring decode|JSON parse failed/i;
     const DEBUG_HOUSEKEEPING_RE = /RSSI Signal|WiFi|Sensor ID/i;
-    const DEBUG_MAX_LINES = 500;
 
-    const debugLogEl = document.getElementById("debugLog");
-    const debugToggle = document.getElementById("debugToggle");
-
-    function debugLog(line) {
-      if (!debugToggle.checked || !line) return;
+    function appendLogLine(text, cssClass) {
       const div = document.createElement("div");
-      div.className = DEBUG_SUCCESS_RE.test(line) ? "dbg-success"
-        : DEBUG_FAIL_RE.test(line) ? "dbg-fail"
-        : DEBUG_HOUSEKEEPING_RE.test(line) ? "dbg-house"
-        : "dbg-dim";
-      div.textContent = line;
-      debugLogEl.appendChild(div);
-      while (debugLogEl.childNodes.length > DEBUG_MAX_LINES) debugLogEl.removeChild(debugLogEl.firstChild);
-      debugLogEl.scrollTop = debugLogEl.scrollHeight;
+      div.className = cssClass;
+      div.textContent = text;
+      logEl.appendChild(div);
+      while (logEl.childNodes.length > LOG_MAX_LINES) logEl.removeChild(logEl.firstChild);
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    // Used for the configurator's own command/reply traffic -- always shown.
+    function log(dir, text) {
+      appendLogLine(`${dir} ${text}`, "dbg-dim");
     }
 
     function handleLine(line) {
-      debugLog(line.replace(/[\r\n]+$/, ""));
-
       const idx = line.indexOf(REPLY_MARKER);
-      if (idx === -1) return;
+
+      if (idx === -1) {
+        // Not a CLI reply -- CC1101 decode chatter, only shown when opted in.
+        const clean = line.replace(/[\r\n]+$/, "");
+        if (debugToggle.checked && clean) {
+          const cssClass = DEBUG_SUCCESS_RE.test(clean) ? "dbg-success"
+            : DEBUG_FAIL_RE.test(clean) ? "dbg-fail"
+            : DEBUG_HOUSEKEEPING_RE.test(clean) ? "dbg-house"
+            : "dbg-dim";
+          appendLogLine(clean, cssClass);
+        }
+        return;
+      }
+
       const reply = line.slice(idx + REPLY_MARKER.length).replace(/[\r\n]+$/, "");
       log("<-", reply);
       if (pendingResolve) {
@@ -364,7 +352,6 @@
       document.getElementById("triggerCard").style.display = connected ? "block" : "none";
       document.getElementById("channelsCard").style.display = connected ? "block" : "none";
       document.getElementById("addCard").style.display = connected ? "block" : "none";
-      document.getElementById("debugCard").style.display = connected ? "block" : "none";
     }
 
     async function refreshDeviceName() {
@@ -474,10 +461,10 @@
     });
 
     debugToggle.addEventListener("change", () => {
-      debugLogEl.style.display = debugToggle.checked ? "block" : "none";
+      if (debugToggle.checked) document.getElementById("logDetails").open = true;
     });
-    document.getElementById("debugClearBtn").addEventListener("click", () => {
-      debugLogEl.innerHTML = "";
+    document.getElementById("logClearBtn").addEventListener("click", () => {
+      logEl.innerHTML = "";
     });
 
     document.getElementById("tabHashtag").addEventListener("click", () => {
