@@ -19,15 +19,6 @@
 #error "WeatherStationSensorManager requires RF_MODULE_GDO0 to be defined (build flag) -- the CC1101's GDO0 pin"
 #endif
 
-// rtl_433's fineoffset.c decoder (fineoffset_WH24_callback) reports one of
-// these two model strings for this hardware family, depending on whether the
-// unit has the optional pressure-sensor add-on (which extends the packet
-// past 215 bits). Units without it -- and so without pressure_hPa -- report
-// as WH65B; all other fields are identical either way.
-static bool isOurSensorModel(const char* model) {
-  return strcmp(model, "Fineoffset-WS69") == 0 || strcmp(model, "Fineoffset-WH65B") == 0;
-}
-
 static rtl_433_ESP rf;
 static char rf_message_buffer[512];
 
@@ -49,10 +40,22 @@ void WeatherStationSensorManager::onDecodedMessage(char* json) {
     return;
   }
 
-  const char* model = doc["model"].as<const char*>();
-  if (model == NULL || !isOurSensorModel(model)) {
-    Serial.printf("WeatherStation: ignoring unrecognized model: %s\n", model == NULL ? "(none)" : model);
-    return;  // not our sensor
+  // MY_DEVICES (see the rtl_433_ESP lib_dep comment in platformio.ini) already
+  // restricts compilation to weather-station-scoped decoders, which between
+  // them can emit a lot of different model strings (WH24/WH65B/WS69,
+  // WH25/WH32/WH32B/HP1000, WHx080, WS80/85/90, ...). Rather than maintain a
+  // matching whitelist here, just check the decode actually produced a field
+  // this project knows how to use -- an unrelated or undecoded signal won't
+  // have any of these regardless of what model string (if any) it reports.
+  bool has_weather_data = !doc["temperature_C"].isNull() || !doc["humidity"].isNull() ||
+                          !doc["pressure_hPa"].isNull() || !doc["wind_dir_deg"].isNull() ||
+                          !doc["wind_avg_m_s"].isNull()  || !doc["wind_max_m_s"].isNull() ||
+                          !doc["rain_mm"].isNull()       || !doc["uvi"].isNull() ||
+                          !doc["light_lux"].isNull();
+  if (!has_weather_data) {
+    const char* model = doc["model"].as<const char*>();
+    Serial.printf("WeatherStation: ignoring decode with no usable weather fields: %s\n", model == NULL ? "(none)" : model);
+    return;
   }
 
   Reading r;  // fresh reading, all fields default to NAN until set below
@@ -211,26 +214,11 @@ bool WeatherStationSensorManager::querySensors(uint8_t requester_permissions, Ca
   if (!isnan(_reading.humidity_pct))   telemetry.addRelativeHumidity(WS_CH_CORE, _reading.humidity_pct);
   if (!isnan(_reading.pressure_hpa))   telemetry.addBarometricPressure(WS_CH_CORE, _reading.pressure_hpa);
 
-  // Wind direction dropped -- CayenneLPP's Direction type carries no context
-  // (just "degrees", could be wind/compass/GPS course/etc), so the companion
-  // app can only show a bare "Direction: 262" with no indication it's wind.
-  // Combined with direction being of little standalone use without paired
-  // speed or a tracked trend, not worth the ambiguity. Still parsed/cached
-  // in _reading above if a better way to surface it comes up later.
-  // if (!isnan(_reading.wind_dir_deg))   telemetry.addDirection(WS_CH_CORE, _reading.wind_dir_deg);
-
-  // Channels 3+ (wind speed/gust, rain, solar, UV) are disabled for now --
-  // CayenneLPP has no dedicated type for these, so they were showing up in
-  // the companion app as unlabeled "Analog Input"/"Generic Sensor" channels.
-  // Re-enable once there's a better way to surface these (custom channel
-  // naming, a different encoding, etc). Data is still parsed and cached in
-  // _reading above, just not sent as telemetry.
-  //
-  // if (!isnan(_reading.wind_speed_mps)) telemetry.addAnalogInput(WS_CH_WIND_SPEED, _reading.wind_speed_mps);
-  // if (!isnan(_reading.wind_gust_mps))  telemetry.addAnalogInput(WS_CH_WIND_GUST, _reading.wind_gust_mps);
-  // if (!isnan(_reading.rain_total_mm))  telemetry.addAnalogInput(WS_CH_RAIN_TOTAL, _reading.rain_total_mm);
-  // if (!isnan(_reading.solar_wm2))      telemetry.addGenericSensor(WS_CH_SOLAR, _reading.solar_wm2);
-  // if (!isnan(_reading.uv_index))       telemetry.addGenericSensor(WS_CH_UV, _reading.uv_index);
+  // Wind direction/speed/gust, rain, solar, and UV are parsed and cached in
+  // _reading (see getWeatherReportText() for the free-text report) but not
+  // sent as CayenneLPP telemetry: CayenneLPP has no dedicated types for them,
+  // so they'd show up in the companion app as unlabeled Direction/Analog
+  // Input/Generic Sensor channels.
 
   return true;
 }
