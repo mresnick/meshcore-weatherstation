@@ -897,7 +897,11 @@ void SensorMesh::handleTriggerCommand(char* args, char* reply) {
   sprintf(reply, "OK - trigger set to %s", _weather_trigger);
 }
 
-#define WEATHER_SETTINGS_FILE  "/weather_settings"
+#define WEATHER_SETTINGS_FILE     "/weather_settings"
+// Bumped whenever the on-disk layout changes -- lets loadWeatherSettings()
+// detect a file written by an older (incompatible) layout and fall back to
+// first-boot defaults instead of misreading its bytes as the new fields.
+#define WEATHER_SETTINGS_VERSION  1
 
 void SensorMesh::loadWeatherSettings(FILESYSTEM* fs) {
 #if defined(RP2040_PLATFORM)
@@ -906,24 +910,32 @@ void SensorMesh::loadWeatherSettings(FILESYSTEM* fs) {
   File file = fs->open(WEATHER_SETTINGS_FILE);
 #endif
   if (file) {
-    file.read((uint8_t *) _weather_trigger, sizeof(_weather_trigger));
-    uint8_t count = 0;
-    file.read(&count, 1);
-    num_weather_channels = 0;
-    for (uint8_t i = 0; i < count && i < MAX_WEATHER_CHANNELS; i++) {
-      char name[32];
-      uint8_t secret[32];
-      uint8_t secret_len = 0;
-      file.read((uint8_t *) name, sizeof(name));
-      file.read(secret, sizeof(secret));
-      file.read(&secret_len, 1);
-      joinWeatherChannel(name, secret, secret_len);
+    uint8_t version = 0;
+    file.read(&version, 1);
+    if (version == WEATHER_SETTINGS_VERSION) {
+      file.read((uint8_t *) _weather_trigger, sizeof(_weather_trigger));
+      _weather_trigger[sizeof(_weather_trigger) - 1] = 0;  // guard against a non-terminated read
+      uint8_t count = 0;
+      file.read(&count, 1);
+      num_weather_channels = 0;
+      for (uint8_t i = 0; i < count && i < MAX_WEATHER_CHANNELS; i++) {
+        char name[32];
+        uint8_t secret[32];
+        uint8_t secret_len = 0;
+        file.read((uint8_t *) name, sizeof(name));
+        file.read(secret, sizeof(secret));
+        file.read(&secret_len, 1);
+        joinWeatherChannel(name, secret, secret_len);
+      }
+      file.close();
+      return;
     }
     file.close();
-    return;
+    // Unrecognized version (e.g. a file from an older layout) -- fall through
+    // to first-boot defaults below, same as if no file existed at all.
   }
 
-  // First boot -- no settings file yet. Join a channel unique to this
+  // First boot (or an unrecognized settings file) -- join a channel unique to this
   // device (derived from its own chip ID) and save it immediately, so the
   // default is visible/editable via the web configurator right away.
   char default_channel[32];
@@ -945,6 +957,8 @@ void SensorMesh::saveWeatherSettings() {
 #endif
   if (!file) return;
 
+  uint8_t version = WEATHER_SETTINGS_VERSION;
+  file.write(&version, 1);
   file.write((uint8_t *) _weather_trigger, sizeof(_weather_trigger));
   uint8_t count = (uint8_t) num_weather_channels;
   file.write(&count, 1);
