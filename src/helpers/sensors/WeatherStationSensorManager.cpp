@@ -1,5 +1,13 @@
 #include "WeatherStationSensorManager.h"
 
+// PlatformIO's dependency scanner pulls every .cpp under src/helpers/sensors/
+// into every board environment's build, not just the one that actually wants
+// it (see build_src_filter in variants/xiao_s3_wio_weatherstation/platformio.ini).
+// rtl_433_ESP.h only exists as a lib_dep for that one environment, so guard
+// the whole file on its presence -- other environments get an empty
+// translation unit instead of a hard build failure.
+#if __has_include(<rtl_433_ESP.h>)
+
 #include <math.h>
 #include <ArduinoJson.h>
 #include <rtl_433_ESP.h>
@@ -226,3 +234,5 @@ bool WeatherStationSensorManager::querySensors(uint8_t requester_permissions, Ca
 
   return true;
 }
+
+#endif  // __has_include(<rtl_433_ESP.h>)
