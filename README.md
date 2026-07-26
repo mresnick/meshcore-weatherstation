@@ -72,8 +72,8 @@ Telemetry queries are open to anyone (no login required, matching how any MeshCo
 - `channel join name <psk-base64>`: join a private channel with an explicit key
 - `channel leave name`
 - `channel list`
-- `trigger`: show the current trigger command
-- `trigger <text>`: set the trigger command
+- `get trigger`: show the current trigger command
+- `set trigger <text>`: set the trigger command
 - `set name <text>` / `get name`: set/view the node's name (built into MeshCore's CLI)
 
 ---

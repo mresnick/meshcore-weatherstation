@@ -309,9 +309,9 @@
     }
 
     async function refreshTrigger() {
-      const reply = await sendCommand("trigger");
+      const reply = await sendCommand("get trigger");
       if (reply === null) return;
-      document.getElementById("triggerText").value = reply;
+      document.getElementById("triggerText").value = reply.replace(/^>\s*/, "");
     }
 
     async function refreshChannelList() {
@@ -402,7 +402,7 @@
       if (!text) { statusEl.textContent = "Enter a trigger command."; statusEl.className = "status err"; return; }
       statusEl.textContent = "Updating...";
       statusEl.className = "status";
-      const reply = await sendCommand(`trigger ${text}`);
+      const reply = await sendCommand(`set trigger ${text}`);
       if (reply === null) { statusEl.textContent = "Timed out."; statusEl.className = "status err"; return; }
       statusEl.textContent = reply;
       statusEl.className = reply.startsWith("OK") ? "status ok" : "status err";

@@ -496,8 +496,10 @@ void SensorMesh::handleCommand(uint32_t sender_timestamp, char* command, char* r
     sprintf(reply, "%x", board.getGpio());
   } else if (memcmp(command, "channel ", 8) == 0) {   // format: channel join|leave|list ...
     handleChannelCommand(&command[8], reply);
-  } else if (memcmp(command, "trigger", 7) == 0 && (command[7] == 0 || command[7] == ' ')) {   // format: trigger [<text>]
-    handleTriggerCommand(command[7] == ' ' ? &command[8] : &command[7], reply);
+  } else if (memcmp(command, "get trigger", 11) == 0 && (command[11] == 0 || command[11] == ' ')) {
+    sprintf(reply, "> %s", _weather_trigger);
+  } else if (memcmp(command, "set trigger ", 12) == 0) {
+    handleSetTriggerCommand(&command[12], reply);
   } else{
     _cli.handleCommand(sender_timestamp, command, reply);  // common CLI commands
   }
@@ -879,13 +881,12 @@ void SensorMesh::handleChannelCommand(char* args, char* reply) {
   }
 }
 
-// "trigger"        -- show the current trigger text
-// "trigger <text>" -- set the trigger text
-void SensorMesh::handleTriggerCommand(char* args, char* reply) {
+// "set trigger <text>" -- set the trigger text (view is "get trigger", handled inline in handleCommand)
+void SensorMesh::handleSetTriggerCommand(char* args, char* reply) {
   while (*args == ' ') args++;
 
   if (args[0] == 0) {
-    strcpy(reply, _weather_trigger);
+    strcpy(reply, "Err - usage: set trigger <text>");
     return;
   }
   if (strlen(args) >= sizeof(_weather_trigger)) {

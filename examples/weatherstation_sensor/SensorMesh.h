@@ -177,10 +177,11 @@ private:
   void handleChannelCommand(char* args, char* reply);
 
   // The text that triggers a weather report (default "!weather"), settable
-  // at runtime via the "trigger" CLI command / web configurator, and
-  // persisted alongside the channel list.
+  // at runtime via "get trigger"/"set trigger <text>" (mirrors CommonCLI's
+  // get/set pattern) or the web configurator, and persisted alongside the
+  // channel list.
   char _weather_trigger[16];
-  void handleTriggerCommand(char* args, char* reply);
+  void handleSetTriggerCommand(char* args, char* reply);
   void loadWeatherSettings(FILESYSTEM* fs);
   void saveWeatherSettings();
 
