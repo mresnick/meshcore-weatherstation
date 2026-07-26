@@ -254,8 +254,19 @@
       }
     }
 
+    // Commands are queued and sent strictly one-at-a-time: pendingResolve is a
+    // single shared slot, so if two commands were ever in flight together, the
+    // reply to the first would get delivered to the second's caller instead.
+    let commandChain = Promise.resolve();
+
     // Sends a CLI command and resolves with the device's reply text (or null on timeout).
     function sendCommand(cmd, timeoutMs = 3000) {
+      const result = commandChain.then(() => sendCommandNow(cmd, timeoutMs));
+      commandChain = result.catch(() => {});
+      return result;
+    }
+
+    function sendCommandNow(cmd, timeoutMs) {
       return new Promise(async (resolve) => {
         log("->", cmd);
         let settled = false;
