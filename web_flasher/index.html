@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MeshCore Weather Station Gateway - Web Flasher</title>
+  <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js"></script>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f7f7f8;
+      --fg: #1a1a1a;
+      --card: #ffffff;
+      --border: #e0e0e0;
+      --accent: #2563eb;
+      --muted: #666;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #16181d;
+        --fg: #e8e8e8;
+        --card: #21242b;
+        --border: #333844;
+        --accent: #5b9dff;
+        --muted: #9aa1ac;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      display: flex;
+      justify-content: center;
+      padding: 2rem 1rem;
+    }
+    main {
+      max-width: 640px;
+      width: 100%;
+    }
+    h1 {
+      font-size: 1.5rem;
+      margin-bottom: 0.25rem;
+    }
+    .subtitle {
+      color: var(--muted);
+      margin-bottom: 1.5rem;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 1.25rem;
+    }
+    .card h2 {
+      font-size: 1.05rem;
+      margin-top: 0;
+    }
+    ol, ul {
+      padding-left: 1.25rem;
+      line-height: 1.6;
+    }
+    esp-web-install-button {
+      display: block;
+      margin: 1rem 0;
+    }
+    code {
+      background: rgba(127, 127, 127, 0.15);
+      padding: 0.15em 0.4em;
+      border-radius: 4px;
+      font-size: 0.9em;
+    }
+    a { color: var(--accent); }
+    .unsupported {
+      display: none;
+      background: #fff3cd;
+      color: #664d03;
+      border: 1px solid #ffe69c;
+      border-radius: 8px;
+      padding: 1rem;
+      margin-bottom: 1.25rem;
+    }
+    footer {
+      color: var(--muted);
+      font-size: 0.85rem;
+      text-align: center;
+      margin-top: 2rem;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>MeshCore Weather Station Gateway</h1>
+    <p class="subtitle">Flash the firmware directly from your browser -- no build tools required.</p>
+
+    <div class="unsupported" id="unsupported">
+      Your browser doesn't support Web Serial. Please use a desktop build of
+      <strong>Chrome</strong> or <strong>Edge</strong> (not available on mobile, Firefox, or Safari).
+    </div>
+
+    <div class="card">
+      <h2>1. Connect your board</h2>
+      <p>Plug in your Seeed XIAO ESP32-S3 (with Wio-SX1262 and CC1101 wired up per the
+        <a href="https://github.com/mresnick/meshcore-weatherstation#hardware" target="_blank" rel="noopener">hardware guide</a>)
+        via USB.</p>
+
+      <h2>2. Flash</h2>
+      <esp-web-install-button manifest="./manifest.json"></esp-web-install-button>
+      <p style="color: var(--muted); font-size: 0.9rem;">
+        This erases the board and installs the latest weather-station gateway firmware.
+        Your node identity/config will be reset.
+      </p>
+    </div>
+
+    <div class="card">
+      <h2>3. After flashing</h2>
+      <ul>
+        <li>Open a serial terminal (115200 baud) to see boot/decode logs.</li>
+        <li>Connect with any <a href="https://github.com/meshcore-dev/MeshCore#-meshcore-clients" target="_blank" rel="noopener">MeshCore client</a> to query telemetry, or send <code>!weather</code> in the configured group channel.</li>
+        <li>Default admin password is <code>password</code> -- change it via the CLI (<code>set password ...</code>) before deploying.</li>
+      </ul>
+    </div>
+
+    <footer>
+      <a href="https://github.com/mresnick/meshcore-weatherstation" target="_blank" rel="noopener">Source on GitHub</a>
+    </footer>
+  </main>
+
+  <script>
+    if (!("serial" in navigator)) {
+      document.getElementById("unsupported").style.display = "block";
+    }
+  </script>
+</body>
+</html>

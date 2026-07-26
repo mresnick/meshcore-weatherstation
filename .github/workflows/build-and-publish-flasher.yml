@@ -1,0 +1,84 @@
+name: Build firmware and publish web flasher
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install PlatformIO
+        run: pip install platformio
+
+      - name: Build firmware
+        run: pio run -e Xiao_S3_WIO_weatherstation_sensor
+
+      - name: Locate boot_app0.bin
+        id: boot_app0
+        run: |
+          BOOT_APP0=$(find ~/.platformio/packages/framework-arduinoespressif32 -name boot_app0.bin | head -1)
+          echo "path=$BOOT_APP0" >> "$GITHUB_OUTPUT"
+
+      - name: Stage site
+        run: |
+          set -e
+          BUILD_DIR=.pio/build/Xiao_S3_WIO_weatherstation_sensor
+          SITE_DIR=_site
+
+          mkdir -p "$SITE_DIR"
+          cp web_flasher/index.html "$SITE_DIR/"
+          cp web_flasher/robots.txt "$SITE_DIR/"
+          cp "$BUILD_DIR/bootloader.bin" "$SITE_DIR/"
+          cp "$BUILD_DIR/partitions.bin" "$SITE_DIR/"
+          cp "$BUILD_DIR/firmware.bin" "$SITE_DIR/"
+          cp "${{ steps.boot_app0.outputs.path }}" "$SITE_DIR/boot_app0.bin"
+
+          cat > "$SITE_DIR/manifest.json" <<EOF
+          {
+            "name": "MeshCore Weather Station Gateway",
+            "version": "$(git rev-parse --short HEAD)",
+            "new_install_prompt_erase": true,
+            "builds": [
+              {
+                "chipFamily": "ESP32-S3",
+                "parts": [
+                  { "path": "bootloader.bin", "offset": 0 },
+                  { "path": "partitions.bin", "offset": 32768 },
+                  { "path": "boot_app0.bin", "offset": 57344 },
+                  { "path": "firmware.bin", "offset": 65536 }
+                ]
+              }
+            ]
+          }
+          EOF
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,3 +1,79 @@
+# MeshCore Weather Station Gateway
+
+This is a fork of [MeshCore](https://github.com/meshcore-dev/MeshCore) that turns a small ESP32 board into a bridge between a Fine Offset-protocol weather station and a MeshCore mesh network. It listens directly for the weather station's own 915MHz radio broadcast (no gateway/hub required) and makes the readings available over the mesh -- both as structured telemetry, and as a free-text `!weather` report you can request from a group channel or direct message.
+
+## Scope
+
+This project targets **weather stations**: sensors reporting temperature, humidity, barometric pressure, wind speed/direction, rainfall, solar irradiance, and UV index. It intentionally does **not** cover other Fine Offset-protocol devices such as soil moisture sensors, lightning detectors, air-quality monitors, or water-leak sensors -- those are out of scope.
+
+Fine Offset Electronics is the actual manufacturer behind many rebranded weather stations (Ecowitt, Ambient Weather, Froggit, Misol, and others) -- if your station shows up under one of those brand names, it's very likely compatible.
+
+## How it works
+
+The gateway is a dual-radio device:
+- A **Wio-SX1262 LoRa radio** runs the actual MeshCore mesh protocol (the same as any other MeshCore node).
+- A **CC1101 sub-GHz receiver** listens directly for the weather station's own FSK broadcast (915MHz in the US) and decodes it locally using a ported [rtl_433](https://github.com/merbanan/rtl_433) decoder -- no Wi-Fi, no vendor gateway/cloud account, no polling anything. The node only ever answers requests; it never pushes anything onto the mesh unprompted.
+
+Once running, other nodes can:
+- Request standard CayenneLPP telemetry (temperature, humidity, pressure) the same way as any MeshCore sensor node.
+- Post `!weather` in a joined group channel (default: hashtag channel `#weathertest` -- change this for your own deployment) or send it as a direct message, and get back a full free-text report (temperature, humidity, pressure, wind, rain rate, solar, UV) that isn't limited by CayenneLPP's fixed type vocabulary.
+
+## Hardware
+
+- **[Seeed Studio XIAO ESP32-S3](https://www.seeedstudio.com/Seeed-XIAO-ESP32S3-p-5627.html)**
+- **[Seeed Wio-SX1262](https://www.seeedstudio.com/Wio-SX1262-p-5982.html)** LoRa module (stacks directly onto the XIAO -- no wiring needed)
+- A **CC1101** sub-GHz transceiver breakout board (915MHz-region variant for the US)
+- A Fine Offset-protocol weather station transmitting on 915MHz (or the appropriate ISM band for your region)
+
+### CC1101 wiring
+
+The Wio-SX1262 stacks onto the XIAO directly and uses its own dedicated pins, so all of the XIAO's remaining GPIO (D0-D5) are free for the CC1101:
+
+| CC1101 pin | XIAO pin | GPIO |
+|---|---|---|
+| SCK  | D0 | GPIO1 |
+| MOSI | D1 | GPIO2 |
+| MISO | D2 | GPIO3 |
+| CSN  | D3 | GPIO4 |
+| GDO0 | D4 | GPIO5 |
+| GDO2 | D5 | GPIO6 |
+| VCC  | 3V3 | -- |
+| GND  | GND | -- |
+
+## Flashing
+
+The easiest way to get started is the web flasher -- no build tools required, just Chrome or Edge:
+
+**[Flash it now](https://mresnick.github.io/meshcore-weatherstation/)** (requires a browser with WebSerial support, and a USB cable)
+
+## Building from source
+
+- Install [PlatformIO](https://docs.platformio.org) in [Visual Studio Code](https://code.visualstudio.com)
+- Clone this repository and open it in VS Code
+- Build/upload the [`Xiao_S3_WIO_weatherstation_sensor`](./variants/xiao_s3_wio_weatherstation/platformio.ini) environment, based on the [weatherstation_sensor](./examples/weatherstation_sensor) example
+
+Key build flags (set in `variants/xiao_s3_wio_weatherstation/platformio.ini`):
+
+| Flag | Purpose |
+|---|---|
+| `ADVERT_NAME` | Node name advertised on the mesh |
+| `ADVERT_LAT` / `ADVERT_LON` | Node location (optional) |
+| `ADMIN_PASSWORD` | Password for admin/config access over the mesh CLI |
+| `RF_MODULE_FREQUENCY` | CC1101 receive frequency (915.00 for US; adjust for your region) |
+| `WEATHER_CHANNEL_NAME` / `WEATHER_CHANNEL_PSK` | The group channel that responds to `!weather` |
+| `WEATHER_COMMAND` | The trigger command (default `!weather`) |
+
+## CLI commands
+
+Telemetry queries are open to anyone (no login required, matching how any MeshCore sensor node works). Admin commands require the mesh CLI admin password:
+
+- `channel join #name` -- join a "hashtag channel" (key derived from the name itself)
+- `channel join name <psk-base64>` -- join a private channel with an explicit key
+- `channel leave name`
+- `channel list`
+
+---
+
 ## About MeshCore
 
 MeshCore is a lightweight, portable C++ library that enables multi-hop packet routing for embedded projects using LoRa and other packet radios. It is designed for developers who want to create resilient, decentralized communication networks that work without the internet.
