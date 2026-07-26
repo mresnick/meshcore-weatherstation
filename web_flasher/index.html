@@ -93,7 +93,7 @@
 <body>
   <main>
     <h1>MeshCore Weather Station Gateway</h1>
-    <p class="subtitle">Flash the firmware directly from your browser -- no build tools required.</p>
+    <p class="subtitle">Flash the firmware directly from your browser. No build tools required.</p>
 
     <div class="unsupported" id="unsupported">
       Your browser doesn't support Web Serial. Please use a desktop build of
@@ -118,8 +118,9 @@
       <h2>3. After flashing</h2>
       <ul>
         <li>Open a serial terminal (115200 baud) to see boot/decode logs.</li>
-        <li>Connect with any <a href="https://github.com/meshcore-dev/MeshCore#-meshcore-clients" target="_blank" rel="noopener">MeshCore client</a> to query telemetry, or send <code>!weather</code> in the configured group channel.</li>
-        <li>Default admin password is <code>password</code> -- change it via the CLI (<code>set password ...</code>) before deploying.</li>
+        <li>Use the <a href="./configure/">web configurator</a> over USB to choose which group channels the node listens to for <code>!weather</code>.</li>
+        <li>Connect with any <a href="https://github.com/meshcore-dev/MeshCore#-meshcore-clients" target="_blank" rel="noopener">MeshCore client</a> to query telemetry, or send <code>!weather</code> in a joined group channel.</li>
+        <li>Default admin password is <code>password</code>. Change it via the CLI (<code>set password ...</code>) before deploying.</li>
       </ul>
     </div>
 

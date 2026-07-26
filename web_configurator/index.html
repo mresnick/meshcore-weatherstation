@@ -1,0 +1,379 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MeshCore Weather Station Configurator</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f7f7f8;
+      --fg: #1a1a1a;
+      --card: #ffffff;
+      --border: #e0e0e0;
+      --accent: #2563eb;
+      --accent-fg: #ffffff;
+      --danger: #dc2626;
+      --muted: #666;
+      --input-bg: #ffffff;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #16181d;
+        --fg: #e8e8e8;
+        --card: #21242b;
+        --border: #333844;
+        --accent: #5b9dff;
+        --accent-fg: #0a0a0a;
+        --danger: #f87171;
+        --muted: #9aa1ac;
+        --input-bg: #16181d;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      display: flex;
+      justify-content: center;
+      padding: 2rem 1rem;
+    }
+    main { max-width: 640px; width: 100%; }
+    h1 { font-size: 1.5rem; margin-bottom: 0.25rem; }
+    .subtitle { color: var(--muted); margin-bottom: 1.5rem; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 1.25rem;
+    }
+    .card h2 { font-size: 1.05rem; margin-top: 0; }
+    button {
+      font: inherit;
+      border: none;
+      border-radius: 8px;
+      padding: 0.6rem 1.1rem;
+      cursor: pointer;
+      background: var(--accent);
+      color: var(--accent-fg);
+    }
+    button:disabled { opacity: 0.5; cursor: default; }
+    button.secondary {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--fg);
+    }
+    button.danger { background: var(--danger); color: #fff; }
+    input[type=text], select {
+      font: inherit;
+      padding: 0.5rem 0.6rem;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--input-bg);
+      color: var(--fg);
+      width: 100%;
+    }
+    label { font-size: 0.85rem; color: var(--muted); display: block; margin-bottom: 0.25rem; }
+    .field { margin-bottom: 0.9rem; }
+    .row { display: flex; gap: 0.6rem; align-items: center; }
+    .channel-list { list-style: none; padding: 0; margin: 0; }
+    .channel-list li {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.5rem 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .channel-list li:last-child { border-bottom: none; }
+    .status { font-size: 0.9rem; color: var(--muted); margin: 0.5rem 0; }
+    .status.ok { color: #16a34a; }
+    .status.err { color: var(--danger); }
+    details summary { cursor: pointer; color: var(--muted); font-size: 0.85rem; }
+    pre#log {
+      background: rgba(127, 127, 127, 0.1);
+      border-radius: 8px;
+      padding: 0.75rem;
+      font-size: 0.78rem;
+      max-height: 200px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+      margin-top: 0.5rem;
+    }
+    .unsupported {
+      display: none;
+      background: #fff3cd;
+      color: #664d03;
+      border: 1px solid #ffe69c;
+      border-radius: 8px;
+      padding: 1rem;
+      margin-bottom: 1.25rem;
+    }
+    footer { color: var(--muted); font-size: 0.85rem; text-align: center; margin-top: 2rem; }
+    a { color: var(--accent); }
+    .tabs { display: flex; gap: 0.5rem; margin-bottom: 0.75rem; }
+    .tabs button { background: transparent; border: 1px solid var(--border); color: var(--muted); }
+    .tabs button.active { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>MeshCore Weather Station Configurator</h1>
+    <p class="subtitle">Choose which group channels your node listens to for <code>!weather</code>, over USB.</p>
+
+    <div class="unsupported" id="unsupported">
+      Your browser doesn't support Web Serial. Please use a desktop build of
+      <strong>Chrome</strong> or <strong>Edge</strong> (not available on mobile, Firefox, or Safari).
+    </div>
+
+    <div class="card">
+      <h2>Connection</h2>
+      <div class="row">
+        <button id="connectBtn">Connect</button>
+        <span class="status" id="connStatus">Not connected</span>
+      </div>
+    </div>
+
+    <div class="card" id="channelsCard" style="display:none">
+      <h2>Joined channels</h2>
+      <ul class="channel-list" id="channelList"></ul>
+      <p class="status" id="channelStatus"></p>
+    </div>
+
+    <div class="card" id="addCard" style="display:none">
+      <h2>Join a channel</h2>
+      <div class="tabs">
+        <button type="button" id="tabHashtag" class="active">Hashtag channel</button>
+        <button type="button" id="tabPrivate">Private channel</button>
+      </div>
+
+      <div id="hashtagFields">
+        <div class="field">
+          <label for="hashtagName">Channel name</label>
+          <input type="text" id="hashtagName" placeholder="#somerville-weather">
+        </div>
+        <p class="status">Anyone who joins the same hashtag channel name derives the same key automatically. No secret to share.</p>
+      </div>
+
+      <div id="privateFields" style="display:none">
+        <div class="field">
+          <label for="privateName">Channel name</label>
+          <input type="text" id="privateName" placeholder="my-private-channel">
+        </div>
+        <div class="field">
+          <label for="privateKey">Pre-shared key (base64, 16 or 32 bytes)</label>
+          <input type="text" id="privateKey" placeholder="base64-encoded key">
+        </div>
+      </div>
+
+      <button id="joinBtn">Join</button>
+      <p class="status" id="joinStatus"></p>
+    </div>
+
+    <div class="card">
+      <details>
+        <summary>Raw serial log</summary>
+        <pre id="log"></pre>
+      </details>
+    </div>
+
+    <footer>
+      <a href="https://github.com/mresnick/meshcore-weatherstation" target="_blank" rel="noopener">Source on GitHub</a>
+    </footer>
+  </main>
+
+  <script>
+    if (!("serial" in navigator)) {
+      document.getElementById("unsupported").style.display = "block";
+    }
+
+    let port, writer, reader, keepReading = false;
+    let lineBuffer = "";
+    let pendingResolve = null;
+    const REPLY_MARKER = "  -> ";
+
+    const logEl = document.getElementById("log");
+    function log(dir, text) {
+      logEl.textContent += `${dir} ${text}\n`;
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function handleLine(line) {
+      const idx = line.indexOf(REPLY_MARKER);
+      if (idx === -1) return;
+      const reply = line.slice(idx + REPLY_MARKER.length).replace(/[\r\n]+$/, "");
+      log("<-", reply);
+      if (pendingResolve) {
+        const resolve = pendingResolve;
+        pendingResolve = null;
+        resolve(reply);
+      }
+    }
+
+    async function readLoop() {
+      const decoder = new TextDecoderStream();
+      const closed = port.readable.pipeTo(decoder.writable);
+      reader = decoder.readable.getReader();
+      try {
+        while (keepReading) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          if (value) {
+            lineBuffer += value;
+            let idx;
+            while ((idx = lineBuffer.indexOf("\n")) >= 0) {
+              handleLine(lineBuffer.slice(0, idx));
+              lineBuffer = lineBuffer.slice(idx + 1);
+            }
+          }
+        }
+      } catch (e) {
+        log("!!", "Read error: " + e.message);
+      }
+    }
+
+    // Sends a CLI command and resolves with the device's reply text (or null on timeout).
+    function sendCommand(cmd, timeoutMs = 3000) {
+      return new Promise(async (resolve) => {
+        log("->", cmd);
+        let settled = false;
+        const timer = setTimeout(() => {
+          if (!settled) {
+            settled = true;
+            pendingResolve = null;
+            resolve(null);
+          }
+        }, timeoutMs);
+
+        pendingResolve = (reply) => {
+          if (!settled) {
+            settled = true;
+            clearTimeout(timer);
+            resolve(reply);
+          }
+        };
+
+        const encoder = new TextEncoder();
+        await writer.write(encoder.encode(cmd + "\r"));
+      });
+    }
+
+    function setConnected(connected) {
+      document.getElementById("connectBtn").textContent = connected ? "Disconnect" : "Connect";
+      document.getElementById("connStatus").textContent = connected ? "Connected" : "Not connected";
+      document.getElementById("channelsCard").style.display = connected ? "block" : "none";
+      document.getElementById("addCard").style.display = connected ? "block" : "none";
+    }
+
+    async function refreshChannelList() {
+      const statusEl = document.getElementById("channelStatus");
+      statusEl.textContent = "Loading...";
+      statusEl.className = "status";
+      const reply = await sendCommand("channel list");
+      if (reply === null) {
+        statusEl.textContent = "No response from device (timed out).";
+        statusEl.className = "status err";
+        return;
+      }
+      statusEl.textContent = "";
+      const listEl = document.getElementById("channelList");
+      listEl.innerHTML = "";
+      if (reply.startsWith("(no channels")) {
+        listEl.innerHTML = "<li>No channels joined yet.</li>";
+        return;
+      }
+      const names = reply.split(",").map(s => s.trim()).filter(Boolean);
+      for (const name of names) {
+        const li = document.createElement("li");
+        const span = document.createElement("span");
+        span.textContent = name;
+        const leaveBtn = document.createElement("button");
+        leaveBtn.textContent = "Leave";
+        leaveBtn.className = "danger";
+        leaveBtn.onclick = async () => {
+          leaveBtn.disabled = true;
+          const r = await sendCommand(`channel leave ${name}`);
+          statusEl.textContent = r === null ? "Timed out." : r;
+          statusEl.className = (r && r.startsWith("OK")) ? "status ok" : "status err";
+          refreshChannelList();
+        };
+        li.appendChild(span);
+        li.appendChild(leaveBtn);
+        listEl.appendChild(li);
+      }
+    }
+
+    document.getElementById("connectBtn").addEventListener("click", async () => {
+      if (port) {
+        keepReading = false;
+        try { await reader?.cancel(); } catch (e) {}
+        try { await writer?.close(); } catch (e) {}
+        try { await port.close(); } catch (e) {}
+        port = null;
+        setConnected(false);
+        return;
+      }
+
+      try {
+        port = await navigator.serial.requestPort();
+        await port.open({ baudRate: 115200 });
+        writer = port.writable.getWriter();
+        keepReading = true;
+        readLoop();
+        setConnected(true);
+        await new Promise(r => setTimeout(r, 300)); // let the port settle
+        refreshChannelList();
+      } catch (e) {
+        log("!!", "Connection failed: " + e.message);
+        port = null;
+      }
+    });
+
+    document.getElementById("tabHashtag").addEventListener("click", () => {
+      document.getElementById("tabHashtag").classList.add("active");
+      document.getElementById("tabPrivate").classList.remove("active");
+      document.getElementById("hashtagFields").style.display = "block";
+      document.getElementById("privateFields").style.display = "none";
+    });
+    document.getElementById("tabPrivate").addEventListener("click", () => {
+      document.getElementById("tabPrivate").classList.add("active");
+      document.getElementById("tabHashtag").classList.remove("active");
+      document.getElementById("privateFields").style.display = "block";
+      document.getElementById("hashtagFields").style.display = "none";
+    });
+
+    document.getElementById("joinBtn").addEventListener("click", async () => {
+      const statusEl = document.getElementById("joinStatus");
+      const isHashtag = document.getElementById("tabHashtag").classList.contains("active");
+      let cmd;
+
+      if (isHashtag) {
+        let name = document.getElementById("hashtagName").value.trim();
+        if (!name) { statusEl.textContent = "Enter a channel name."; statusEl.className = "status err"; return; }
+        if (!name.startsWith("#")) name = "#" + name;
+        cmd = `channel join ${name}`;
+      } else {
+        const name = document.getElementById("privateName").value.trim();
+        const key = document.getElementById("privateKey").value.trim();
+        if (!name || !key) { statusEl.textContent = "Enter both a name and a key."; statusEl.className = "status err"; return; }
+        cmd = `channel join ${name} ${key}`;
+      }
+
+      statusEl.textContent = "Joining...";
+      statusEl.className = "status";
+      const reply = await sendCommand(cmd);
+      if (reply === null) {
+        statusEl.textContent = "Timed out.";
+        statusEl.className = "status err";
+        return;
+      }
+      statusEl.textContent = reply;
+      statusEl.className = reply.startsWith("OK") ? "status ok" : "status err";
+      refreshChannelList();
+    });
+  </script>
+</body>
+</html>

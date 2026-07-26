@@ -42,9 +42,10 @@ jobs:
           BUILD_DIR=.pio/build/Xiao_S3_WIO_weatherstation_sensor
           SITE_DIR=_site
 
-          mkdir -p "$SITE_DIR"
+          mkdir -p "$SITE_DIR/configure"
           cp web_flasher/index.html "$SITE_DIR/"
           cp web_flasher/robots.txt "$SITE_DIR/"
+          cp web_configurator/index.html "$SITE_DIR/configure/"
           cp "$BUILD_DIR/bootloader.bin" "$SITE_DIR/"
           cp "$BUILD_DIR/partitions.bin" "$SITE_DIR/"
           cp "$BUILD_DIR/firmware.bin" "$SITE_DIR/"
