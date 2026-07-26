@@ -174,7 +174,7 @@
     </div>
 
     <div class="card">
-      <details>
+      <details id="logDetails">
         <summary>Raw serial log</summary>
         <pre id="log"></pre>
       </details>
@@ -263,7 +263,9 @@
 
     function setConnected(connected) {
       document.getElementById("connectBtn").textContent = connected ? "Disconnect" : "Connect";
-      document.getElementById("connStatus").textContent = connected ? "Connected" : "Not connected";
+      const statusEl = document.getElementById("connStatus");
+      statusEl.textContent = connected ? "Connected" : "Not connected";
+      statusEl.className = connected ? "status ok" : "status";
       document.getElementById("channelsCard").style.display = connected ? "block" : "none";
       document.getElementById("addCard").style.display = connected ? "block" : "none";
     }
@@ -328,6 +330,10 @@
         refreshChannelList();
       } catch (e) {
         log("!!", "Connection failed: " + e.message);
+        const statusEl = document.getElementById("connStatus");
+        statusEl.textContent = "Connection failed: " + e.message;
+        statusEl.className = "status err";
+        document.getElementById("logDetails").open = true;
         port = null;
       }
     });
