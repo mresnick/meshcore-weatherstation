@@ -98,11 +98,15 @@ bool WeatherStationSensorManager::begin() {
   rf.initReceiver(RF_MODULE_GDO0, RF_MODULE_FREQUENCY);
 
 #ifdef RF_CC1101
-  // Push the AGC's target channel-filter amplitude to its max (42dB, vs the
-  // 33dB default) so it works harder pulling a weak signal up before the bit
-  // slicer -- this link is typically marginal. See RADIOLIB_CC1101_REG_AGCCTRL2.
+  // AGC target channel-filter amplitude (default 33dB per the CC1101
+  // datasheet/RadioLib). Overridable via WEATHERSTATION_AGC_TARGET for A/B
+  // testing against different antenna/link conditions -- see
+  // RADIOLIB_CC1101_REG_AGCCTRL2.
+  #ifndef WEATHERSTATION_AGC_TARGET
+  #define WEATHERSTATION_AGC_TARGET RADIOLIB_CC1101_MAGN_TARGET_42_DB
+  #endif
   extern CC1101 radio;
-  radio.SPIsetRegValue(RADIOLIB_CC1101_REG_AGCCTRL2, RADIOLIB_CC1101_MAGN_TARGET_42_DB, 2, 0);
+  radio.SPIsetRegValue(RADIOLIB_CC1101_REG_AGCCTRL2, WEATHERSTATION_AGC_TARGET, 2, 0);
 #endif
 
   rf.enableReceiver();
