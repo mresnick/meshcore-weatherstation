@@ -54,8 +54,8 @@
 // without CayenneLPP's type/labeling constraints. Still request/response
 // only: this node never posts to a channel except in reply to the trigger.
 // This is just the first-boot default -- both the trigger text and channel
-// membership are runtime-configurable (CLI "trigger"/"channel" commands, or
-// the web configurator) and persisted to flash from then on.
+// membership are runtime-configurable (CLI "get/set trigger" and "channel"
+// commands, or the web configurator) and persisted to flash from then on.
 #ifndef WEATHER_COMMAND
   #define WEATHER_COMMAND  "!weather"
 #endif

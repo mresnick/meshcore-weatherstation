@@ -48,6 +48,8 @@ Once flashed, use the [web configurator](https://mresnick.github.io/meshcore-wea
 
 Each device picks its own unique defaults on first boot (a name and a group channel both derived from its chip ID), so multiple freshly-flashed units aren't indistinguishable from each other. Everything you change is saved to flash and survives a reboot or power loss.
 
+The configurator also has a raw serial log with an optional decode-log view (colorized: green for a successful decode, yellow for a capture that failed to decode, cyan for housekeeping) -- useful for judging reception quality without a separate serial terminal.
+
 ## Building from source
 
 - Install [PlatformIO](https://docs.platformio.org) in [Visual Studio Code](https://code.visualstudio.com)
@@ -63,6 +65,8 @@ Key build flags (set in `variants/xiao_s3_wio_weatherstation/platformio.ini`):
 | `ADMIN_PASSWORD` | Password for admin/config access over the mesh CLI |
 | `RF_MODULE_FREQUENCY` | CC1101 receive frequency (915.00 for US; adjust for your region) |
 | `WEATHER_COMMAND` | First-boot default trigger command (default `!weather`) |
+| `FSK_DROPOUT_GATE_US` | How long into a signal before a brief RSSI dip is tolerated instead of ending reception (default 4000; the underlying library's own default is 30000, longer than a full Fine Offset packet) |
+| `WEATHERSTATION_AGC_TARGET` | CC1101 AGC target amplitude, one of the `RADIOLIB_CC1101_MAGN_TARGET_*_DB` constants (default 42dB; the chip's own default is 33dB) |
 
 ## CLI commands
 

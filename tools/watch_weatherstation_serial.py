@@ -12,7 +12,7 @@ they're visible at a glance instead of scrolling past in a wall of text:
   - dim    : everything else, unmodified
 
 Usage:
-    python tools/watch_fineoffset_serial.py [COM_PORT] [BAUD]
+    python tools/watch_weatherstation_serial.py [COM_PORT] [BAUD]
 
 Defaults to COM3 / 115200 if not given. Ctrl+C to quit.
 """
